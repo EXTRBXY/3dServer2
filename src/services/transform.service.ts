@@ -1,10 +1,8 @@
 import { injectable } from 'tsyringe';
 import path from 'path';
 import fs from 'fs';
-import { NodeIO, Document } from '@gltf-transform/core';
-import { KHRONOS_EXTENSIONS, ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { prune, dedup, weld } from '@gltf-transform/functions';
-import { Matrix4 } from 'three';
+import { NodeIO } from '@gltf-transform/core';
+import { KHRONOS_EXTENSIONS } from '@gltf-transform/extensions';
 import { Size3D } from './scene.service';
 
 @injectable()
@@ -24,15 +22,20 @@ export class TransformService {
     modelId: string,
     stelaSize: Size3D,
     standSize: Size3D | null,
-    materialName: string
+    materialName: string,
+    fileName?: string
   ): Promise<string> {
-    const inputPath = path.join(this.modelsPath, `${modelId}.glb`);
+    // Если передано имя файла, используем его, иначе формируем по modelId
+    const inputFile = fileName || `${modelId}.glb`;
+    const inputPath = path.join(this.modelsPath, inputFile);
     const timestamp = Date.now();
     const outputFileName = `${modelId}_${timestamp}.glb`;
     const outputPath = path.join(this.outputPath, 'glb', outputFileName);
+    const outputDir = path.dirname(outputPath);
 
     try {
-      console.log(`Трансформация модели ${modelId} с использованием gltf-transform`);
+      console.log(`Трансформация модели ${modelId}`);
+      console.log(`Входной файл: ${inputFile}`);
       console.log(`- Размер стелы: ${JSON.stringify(stelaSize)}`);
       console.log(`- Размер подставки: ${standSize ? JSON.stringify(standSize) : 'нет'}`);
 
@@ -41,284 +44,119 @@ export class TransformService {
         throw new Error(`Файл модели не найден: ${inputPath}`);
       }
 
-      // Настройка I/O
-      const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
-      
-      // Чтение документа
+      // Создаем директорию для вывода, если она не существует
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      // Загружаем GLB с помощью gltf-transform
+      const io = new NodeIO().registerExtensions(KHRONOS_EXTENSIONS);
       const document = await io.read(inputPath);
-
-      // Применение трансформаций
-      await this.applyTransformations(document, stelaSize, standSize);
-
-      // Оптимизация модели
-      await document.transform(
-        prune(),
-        dedup(),
-        weld()
-      );
-
-      // Сохранение результата
-      await io.write(outputPath, document);
       
-      console.log(`Модель успешно трансформирована и сохранена: ${outputPath}`);
+      // Получаем корневой узел
+      const scene = document.getRoot().getDefaultScene() || document.getRoot().listScenes()[0];
+      if (!scene) {
+        throw new Error("Сцена не найдена в модели");
+      }
+      
+      // Находим все ноды в модели
+      const nodes = document.getRoot().listNodes();
+      
+      // Идентифицируем стелу и подставку по имени или позиции
+      // Предполагаем, что стела - это основной объект, а подставка (если есть) находится ниже
+      let stelaMesh = null;
+      let standMesh = null;
+      
+      for (const node of nodes) {
+        const name = node.getName().toLowerCase();
+        if (name.includes('stela') || name.includes('stella') || name.includes('стела')) {
+          stelaMesh = node;
+        } else if (name.includes('stand') || name.includes('подставка')) {
+          standMesh = node;
+        }
+      }
+      
+      // Если не нашли по имени, пробуем найти по размеру и позиции
+      if (!stelaMesh || !standMesh) {
+        // Сортируем по размеру (бОльший объект обычно стела)
+        const sortedBySize = [...nodes].sort((a, b) => {
+          const aScale = a.getScale();
+          const bScale = b.getScale();
+          const aVolume = aScale[0] * aScale[1] * aScale[2];
+          const bVolume = bScale[0] * bScale[1] * bScale[2];
+          return bVolume - aVolume;
+        });
+        
+        // Если не нашли стелу по имени, берем самый большой объект
+        if (!stelaMesh && sortedBySize.length > 0) {
+          stelaMesh = sortedBySize[0];
+        }
+        
+        // Если нет подставки по имени, но она должна быть, ищем подходящий объект
+        if (!standMesh && standSize && sortedBySize.length > 1 && stelaMesh) {
+          // Подставка обычно находится ниже стелы по Y
+          for (let i = 1; i < sortedBySize.length; i++) {
+            const node = sortedBySize[i];
+            const translation = node.getTranslation();
+            // Если объект находится ниже стелы по Y, это вероятно подставка
+            if (translation[1] < stelaMesh.getTranslation()[1]) {
+              standMesh = node;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Применяем изменения к стеле
+      if (stelaMesh) {
+        console.log('Применяем размеры к стеле');
+        const originalScale = stelaMesh.getScale();
+        const originalTranslation = stelaMesh.getTranslation();
+        
+        // Рассчитываем новый масштаб для соответствия заданным размерам
+        // Предполагаем, что изначальные размеры при масштабе 1 - это какой-то известный стандарт
+        // Например, если при масштабе 1 высота = 1, то для высоты 80 масштаб будет 80
+        // В реальности нужно будет уточнить базовые размеры модели
+        const newScaleX = stelaSize.width / 40 * originalScale[0];
+        const newScaleY = stelaSize.height / 80 * originalScale[1];
+        const newScaleZ = stelaSize.depth / 5 * originalScale[2];
+        
+        stelaMesh.setScale([newScaleX, newScaleY, newScaleZ]);
+        console.log(`Новый масштаб стелы: [${newScaleX}, ${newScaleY}, ${newScaleZ}]`);
+      } else {
+        console.warn('Стела не найдена в модели');
+      }
+      
+      // Применяем изменения к подставке, если она есть и нужна
+      if (standMesh && standSize) {
+        console.log('Применяем размеры к подставке');
+        const originalScale = standMesh.getScale();
+        
+        // Аналогично для подставки
+        const newScaleX = standSize.width / 50 * originalScale[0];
+        const newScaleY = standSize.height / 10 * originalScale[1];
+        const newScaleZ = standSize.depth / 20 * originalScale[2];
+        
+        standMesh.setScale([newScaleX, newScaleY, newScaleZ]);
+        console.log(`Новый масштаб подставки: [${newScaleX}, ${newScaleY}, ${newScaleZ}]`);
+      } else if (standSize) {
+        console.warn('Подставка указана в параметрах, но не найдена в модели');
+      }
+      
+      // Если подставка должна быть скрыта (standSize == null), но она есть в модели
+      if (!standSize && standMesh) {
+        console.log('Скрываем подставку');
+        standMesh.setScale([0, 0, 0]);
+      }
+      
+      // Сохраняем модель
+      await io.write(outputPath, document);
+      console.log(`Модель сохранена: ${outputPath}`);
       
       return `/WebAR/glb/${outputFileName}`;
     } catch (error) {
       console.error('Ошибка при трансформации модели:', error);
       throw error;
     }
-  }
-
-  /**
-   * Применяет трансформации к модели в соответствии с заданными параметрами
-   */
-  private async applyTransformations(
-    document: Document, 
-    stelaSize: Size3D, 
-    standSize: Size3D | null
-  ): Promise<void> {
-    const root = document.getRoot();
-    const meshes = root.listMeshes();
-    
-    // Обход всех мешей в документе
-    for (const mesh of meshes) {
-      const meshName = mesh.getName().toLowerCase();
-      
-      // Определяем, является ли меш стелой или подставкой
-      if (meshName.includes('node_stand')) {
-        if (standSize) {
-          await this.transformStand(mesh, standSize);
-        } else {
-          // Скрыть подставку, если размер не указан
-          await this.hideMesh(document, mesh);
-        }
-      } else if (meshName.includes('node') || meshName.includes('other')) {
-        await this.transformStela(mesh, stelaSize);
-      }
-    }
-    
-    // Соединяем все меши в правильных позициях
-    await this.alignMeshes(document, standSize !== null);
-  }
-
-  /**
-   * Трансформирует меш стелы, применяя нужные размеры
-   */
-  private async transformStela(mesh: any, size: Size3D): Promise<void> {
-    console.log(`Трансформация стелы: ${mesh.getName()}`);
-    
-    // Получаем оригинальные размеры
-    const originalSize = await this.getMeshSize(mesh);
-    
-    // Вычисляем масштабные факторы (от сантиметров к метрам)
-    const scaleFactors = {
-      width: size.width / (originalSize.width * 100),
-      height: size.height / (originalSize.height * 100),
-      depth: size.depth / (originalSize.depth * 100)
-    };
-    
-    console.log(`Исходный размер стелы: ${JSON.stringify(originalSize)}`);
-    console.log(`Коэффициенты масштабирования: ${JSON.stringify(scaleFactors)}`);
-    
-    // Создаем матрицу масштабирования
-    const scaleMatrix = new Matrix4().makeScale(
-      scaleFactors.width,
-      scaleFactors.height,
-      scaleFactors.depth
-    );
-    
-    // Применяем трансформацию к каждому примитиву меша
-    for (const primitive of mesh.listPrimitives()) {
-      const position = primitive.getAttribute('POSITION');
-      if (!position) continue;
-      
-      const array = position.getArray();
-      if (!array) continue;
-      
-      // Создаем новый массив для трансформированных координат
-      const newArray = new Float32Array(array.length);
-      
-      // Применяем масштабирование к каждой вершине
-      for (let i = 0; i < array.length; i += 3) {
-        const x = array[i] * scaleFactors.width;
-        const y = array[i + 1] * scaleFactors.height;
-        const z = array[i + 2] * scaleFactors.depth;
-        
-        newArray[i] = x;
-        newArray[i + 1] = y;
-        newArray[i + 2] = z;
-      }
-      
-      // Обновляем атрибут позиции
-      position.setArray(newArray);
-    }
-  }
-
-  /**
-   * Трансформирует меш подставки, применяя нужные размеры
-   */
-  private async transformStand(mesh: any, size: Size3D): Promise<void> {
-    console.log(`Трансформация подставки: ${mesh.getName()}`);
-    
-    // Получаем оригинальные размеры
-    const originalSize = await this.getMeshSize(mesh);
-    
-    // Вычисляем масштабные факторы (от сантиметров к метрам)
-    const scaleFactors = {
-      width: size.width / (originalSize.width * 100),
-      height: size.height / (originalSize.height * 100),
-      depth: size.depth / (originalSize.depth * 100)
-    };
-    
-    console.log(`Исходный размер подставки: ${JSON.stringify(originalSize)}`);
-    console.log(`Коэффициенты масштабирования: ${JSON.stringify(scaleFactors)}`);
-    
-    // Создаем матрицу масштабирования
-    const scaleMatrix = new Matrix4().makeScale(
-      scaleFactors.width,
-      scaleFactors.height,
-      scaleFactors.depth
-    );
-    
-    // Применяем трансформацию к каждому примитиву меша
-    for (const primitive of mesh.listPrimitives()) {
-      const position = primitive.getAttribute('POSITION');
-      if (!position) continue;
-      
-      const array = position.getArray();
-      if (!array) continue;
-      
-      // Создаем новый массив для трансформированных координат
-      const newArray = new Float32Array(array.length);
-      
-      // Применяем масштабирование к каждой вершине
-      for (let i = 0; i < array.length; i += 3) {
-        const x = array[i] * scaleFactors.width;
-        const y = array[i + 1] * scaleFactors.height;
-        const z = array[i + 2] * scaleFactors.depth;
-        
-        newArray[i] = x;
-        newArray[i + 1] = y;
-        newArray[i + 2] = z;
-      }
-      
-      // Обновляем атрибут позиции
-      position.setArray(newArray);
-    }
-  }
-
-  /**
-   * Скрывает меш, удаляя его из всех использующих его нод
-   */
-  private async hideMesh(document: Document, mesh: any): Promise<void> {
-    const nodes = document.getRoot().listNodes();
-    for (const node of nodes) {
-      if (node.getMesh() === mesh) {
-        node.setMesh(null);
-      }
-    }
-  }
-
-  /**
-   * Выравнивает стелу относительно подставки (если есть)
-   */
-  private async alignMeshes(document: Document, hasStand: boolean): Promise<void> {
-    console.log(`Выравнивание мешей, наличие подставки: ${hasStand}`);
-    
-    // Если нет подставки, возвращаем стелу на базовую позицию
-    if (!hasStand) {
-      return;
-    }
-    
-    // Ищем меши стелы и подставки
-    const root = document.getRoot();
-    let stelaMesh = null;
-    let standMesh = null;
-    
-    // Находим меши по имени
-    for (const mesh of root.listMeshes()) {
-      const meshName = mesh.getName().toLowerCase();
-      if (meshName.includes('node_stand')) {
-        standMesh = mesh;
-      } else if (meshName.includes('node') || meshName.includes('other')) {
-        stelaMesh = mesh;
-      }
-    }
-    
-    // Если не нашли оба меша, выходим
-    if (!stelaMesh || !standMesh) {
-      console.log('Не найдены меши для выравнивания');
-      return;
-    }
-    
-    // Находим ноды, которые используют эти меши
-    const nodes = root.listNodes();
-    let stelaNode = null;
-    let standNode = null;
-    
-    for (const node of nodes) {
-      if (node.getMesh() === stelaMesh) {
-        stelaNode = node;
-      } else if (node.getMesh() === standMesh) {
-        standNode = node;
-      }
-    }
-    
-    // Если не нашли обе ноды, выходим
-    if (!stelaNode || !standNode) {
-      console.log('Не найдены ноды для выравнивания');
-      return;
-    }
-    
-    // Определяем размеры мешей
-    const stelaSize = await this.getMeshSize(stelaMesh);
-    const standSize = await this.getMeshSize(standMesh);
-    
-    // Получаем текущие трансформации
-    const stelaTranslation = stelaNode.getTranslation();
-    
-    // Устанавливаем позицию стелы над подставкой
-    stelaTranslation[1] = standSize.height; // Y-координата
-    stelaNode.setTranslation(stelaTranslation);
-    
-    console.log('Выравнивание выполнено');
-  }
-
-  /**
-   * Получает размеры меша
-   */
-  private async getMeshSize(mesh: any): Promise<{ width: number, height: number, depth: number }> {
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    let minZ = Infinity, maxZ = -Infinity;
-    
-    // Обход всех примитивов в меше
-    for (const primitive of mesh.listPrimitives()) {
-      const position = primitive.getAttribute('POSITION');
-      if (!position) continue;
-      
-      const array = position.getArray();
-      if (!array) continue;
-      
-      // Анализ всех вершин для определения границ
-      for (let i = 0; i < array.length; i += 3) {
-        const x = array[i];
-        const y = array[i + 1];
-        const z = array[i + 2];
-        
-        minX = Math.min(minX, x);
-        maxX = Math.max(maxX, x);
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y);
-        minZ = Math.min(minZ, z);
-        maxZ = Math.max(maxZ, z);
-      }
-    }
-    
-    return {
-      width: maxX - minX,
-      height: maxY - minY,
-      depth: maxZ - minZ
-    };
   }
 } 

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест API экспорта моделей</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: #eee;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            border-bottom: none;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            position: relative;
+            bottom: -1px;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ddd;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Тестирование API экспорта 3D моделей</h1>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('json-tab')">JSON API</div>
+        <div class="tab" onclick="switchTab('form-tab')">Форма загрузки</div>
+    </div>
+
+    <div id="json-tab" class="tab-content active">
+        <h2>Тест JSON API</h2>
+        <p>Используйте эту форму для отправки запроса без загрузки файла (используя существующий modelId)</p>
+        
+        <div class="form-group">
+            <label for="modelId">ID модели (имя файла без расширения):</label>
+            <input type="text" id="modelId" name="modelId" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="existingModel">Или выберите из существующих моделей:</label>
+            <select id="existingModel" onchange="updateModelId()">
+                <option value="">Выберите модель...</option>
+                <option value="ПВ-001">ПВ-001</option>
+                <option value="ПВ-233">ПВ-233</option>
+                <option value="ПГ-055">ПГ-055</option>
+                <option value="ПГ-056">ПГ-056</option>
+                <option value="ПГ-058">ПГ-058</option>
+                <option value="ПГ-064">ПГ-064</option>
+                <option value="ПГ-048">ПГ-048</option>
+                <option value="ПГ-039">ПГ-039</option>
+                <option value="МК-111">МК-111</option>
+            </select>
+        </div>
+
+        <h3>Размеры стелы</h3>
+        <div class="form-group">
+            <label for="stelaWidth">Ширина стелы (см):</label>
+            <input type="number" id="stelaWidth" name="stelaWidth" value="40" required>
+        </div>
+        <div class="form-group">
+            <label for="stelaHeight">Высота стелы (см):</label>
+            <input type="number" id="stelaHeight" name="stelaHeight" value="80" required>
+        </div>
+        <div class="form-group">
+            <label for="stelaDepth">Глубина стелы (см):</label>
+            <input type="number" id="stelaDepth" name="stelaDepth" value="5" required>
+        </div>
+
+        <h3>Размеры подставки (оставьте пустыми, чтобы не использовать)</h3>
+        <div class="form-group">
+            <label for="standWidth">Ширина подставки (см):</label>
+            <input type="number" id="standWidth" name="standWidth">
+        </div>
+        <div class="form-group">
+            <label for="standHeight">Высота подставки (см):</label>
+            <input type="number" id="standHeight" name="standHeight">
+        </div>
+        <div class="form-group">
+            <label for="standDepth">Глубина подставки (см):</label>
+            <input type="number" id="standDepth" name="standDepth">
+        </div>
+
+        <div class="form-group">
+            <label for="materialName">Название материала:</label>
+            <input type="text" id="materialName" name="materialName" value="standard">
+        </div>
+
+        <button onclick="sendJsonRequest()">Отправить запрос</button>
+    </div>
+
+    <div id="form-tab" class="tab-content">
+        <h2>Тест загрузки файла</h2>
+        <p>Используйте эту форму для загрузки нового файла модели</p>
+        
+        <form id="upload-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="model">GLB файл модели:</label>
+                <input type="file" id="model" name="model" accept=".glb" required>
+            </div>
+
+            <h3>Размеры стелы</h3>
+            <div class="form-group">
+                <label for="stelaWidthForm">Ширина стелы (см):</label>
+                <input type="number" id="stelaWidthForm" name="stelaWidth" value="40" required>
+            </div>
+            <div class="form-group">
+                <label for="stelaHeightForm">Высота стелы (см):</label>
+                <input type="number" id="stelaHeightForm" name="stelaHeight" value="80" required>
+            </div>
+            <div class="form-group">
+                <label for="stelaDepthForm">Глубина стелы (см):</label>
+                <input type="number" id="stelaDepthForm" name="stelaDepth" value="5" required>
+            </div>
+
+            <h3>Размеры подставки (оставьте пустыми, чтобы не использовать)</h3>
+            <div class="form-group">
+                <label for="standWidthForm">Ширина подставки (см):</label>
+                <input type="number" id="standWidthForm" name="standWidth">
+            </div>
+            <div class="form-group">
+                <label for="standHeightForm">Высота подставки (см):</label>
+                <input type="number" id="standHeightForm" name="standHeight">
+            </div>
+            <div class="form-group">
+                <label for="standDepthForm">Глубина подставки (см):</label>
+                <input type="number" id="standDepthForm" name="standDepth">
+            </div>
+
+            <div class="form-group">
+                <label for="materialNameForm">Название материала:</label>
+                <input type="text" id="materialNameForm" name="materialName" value="standard">
+            </div>
+
+            <button type="button" onclick="sendFormRequest()">Загрузить и обработать</button>
+        </form>
+    </div>
+
+    <div class="response" id="response">
+        Здесь будет отображаться ответ сервера...
+    </div>
+
+    <script>
+        function switchTab(tabId) {
+            // Скрываем все вкладки и удаляем активный класс
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Показываем выбранную вкладку и добавляем активный класс
+            document.getElementById(tabId).classList.add('active');
+            Array.from(document.querySelectorAll('.tab')).find(tab => {
+                return tab.getAttribute('onclick').includes(tabId);
+            }).classList.add('active');
+        }
+
+        function sendJsonRequest() {
+            const responseElement = document.getElementById('response');
+            responseElement.textContent = 'Отправка запроса...';
+            
+            // Получаем значения полей
+            const modelId = document.getElementById('modelId').value;
+            const stelaWidth = document.getElementById('stelaWidth').value;
+            const stelaHeight = document.getElementById('stelaHeight').value;
+            const stelaDepth = document.getElementById('stelaDepth').value;
+            const standWidth = document.getElementById('standWidth').value;
+            const standHeight = document.getElementById('standHeight').value;
+            const standDepth = document.getElementById('standDepth').value;
+            const materialName = document.getElementById('materialName').value;
+            
+            // Валидация обязательных полей
+            if (!modelId || !stelaWidth || !stelaHeight || !stelaDepth) {
+                responseElement.textContent = 'Ошибка: заполните все обязательные поля';
+                return;
+            }
+            
+            // Формируем данные запроса
+            const requestData = {
+                modelId,
+                stelaWidth,
+                stelaHeight,
+                stelaDepth,
+                materialName
+            };
+            
+            // Добавляем размеры подставки, если они заданы
+            if (standWidth && standHeight && standDepth) {
+                requestData.standWidth = standWidth;
+                requestData.standHeight = standHeight;
+                requestData.standDepth = standDepth;
+            }
+            
+            // Отправляем запрос
+            fetch('/process-model', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                responseElement.textContent = JSON.stringify(data, null, 2);
+                if (data.success) {
+                    // Добавляем ссылки для скачивания
+                    const downloadLinks = document.createElement('div');
+                    downloadLinks.innerHTML = `
+                        <h3>Результат:</h3>
+                        <p><a href="${data.glbUrl}" target="_blank">Скачать GLB</a></p>
+                        ${data.usdzUrl ? `<p><a href="${data.usdzUrl}" target="_blank">Скачать USDZ</a></p>` : ''}
+                    `;
+                    responseElement.appendChild(downloadLinks);
+                }
+            })
+            .catch(error => {
+                responseElement.textContent = `Ошибка: ${error.message}`;
+            });
+        }
+        
+        function sendFormRequest() {
+            const responseElement = document.getElementById('response');
+            responseElement.textContent = 'Загрузка и обработка файла...';
+            
+            const formData = new FormData(document.getElementById('upload-form'));
+            
+            // Валидация обязательных полей
+            if (!formData.get('model') || !formData.get('stelaWidth') || 
+                !formData.get('stelaHeight') || !formData.get('stelaDepth')) {
+                responseElement.textContent = 'Ошибка: заполните все обязательные поля';
+                return;
+            }
+            
+            // Отправляем запрос
+            fetch('/process-model', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                responseElement.textContent = JSON.stringify(data, null, 2);
+                if (data.success) {
+                    // Добавляем ссылки для скачивания
+                    const downloadLinks = document.createElement('div');
+                    downloadLinks.innerHTML = `
+                        <h3>Результат:</h3>
+                        <p><a href="${data.glbUrl}" target="_blank">Скачать GLB</a></p>
+                        ${data.usdzUrl ? `<p><a href="${data.usdzUrl}" target="_blank">Скачать USDZ</a></p>` : ''}
+                    `;
+                    responseElement.appendChild(downloadLinks);
+                }
+            })
+            .catch(error => {
+                responseElement.textContent = `Ошибка: ${error.message}`;
+            });
+        }
+
+        function updateModelId() {
+            const selectElement = document.getElementById('existingModel');
+            const modelIdInput = document.getElementById('modelId');
+            if (selectElement.value) {
+                modelIdInput.value = selectElement.value;
+            }
+        }
+        
+        // Установить значение по умолчанию при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            const existingModel = document.getElementById('existingModel');
+            existingModel.value = 'ПВ-001';
+            updateModelId();
+        });
+    </script>
+</body>
+</html> 

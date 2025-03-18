@@ -184,8 +184,14 @@
                     },
                     body: JSON.stringify({
                         modelId,
-                        stelaSize,
-                        standSize,
+                        stelaWidth: stelaSize.width,
+                        stelaHeight: stelaSize.height,
+                        stelaDepth: stelaSize.depth,
+                        ...(hasStand ? {
+                            standWidth: standSize.width,
+                            standHeight: standSize.height,
+                            standDepth: standSize.depth
+                        } : {}),
                         materialName
                     })
                 });

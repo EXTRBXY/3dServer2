@@ -3,20 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Тест API</title>
+    <title>3D Обработка Моделей</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
         }
-        .container {
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-container {
             background-color: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .form-group {
             margin-bottom: 15px;
@@ -26,148 +31,193 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        input[type="text"],
-        input[type="number"] {
+        select, input {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
         }
-        .size-inputs {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-        }
         button {
             background-color: #4CAF50;
             color: white;
-            padding: 10px 20px;
             border: none;
-            border-radius: 4px;
+            padding: 10px 15px;
             cursor: pointer;
+            border-radius: 4px;
             font-size: 16px;
         }
         button:hover {
             background-color: #45a049;
         }
-        .response {
+        .result {
             margin-top: 20px;
-            padding: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
             border-radius: 4px;
+            background-color: #f9f9f9;
             white-space: pre-wrap;
-            font-family: monospace;
+            display: none;
         }
-        .success {
-            background-color: #e8f5e9;
-            border: 1px solid #a5d6a7;
+        .links {
+            margin-top: 20px;
+            display: none;
         }
-        .error {
-            background-color: #ffebee;
-            border: 1px solid #ffcdd2;
+        .links a {
+            display: inline-block;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
         }
-        .checkbox-group {
-            margin: 10px 0;
+        .links a:hover {
+            background-color: #2980b9;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Тест API</h1>
-        <form id="modelForm">
-            <div class="form-group">
-                <label for="modelId">ID модели:</label>
-                <input type="text" id="modelId" required placeholder="Например: ПВ-001">
+    <h1>Обработка 3D Моделей</h1>
+    
+    <div class="form-container">
+        <div class="form-group">
+            <label for="modelSelect">Выберите модель:</label>
+            <select id="modelSelect">
+                <option value="ПВ-001">ПВ-001</option>
+                <option value="ПВ-233">ПВ-233</option>
+                <option value="ПГ-039">ПГ-039</option>
+                <option value="ПГ-048">ПГ-048</option>
+                <option value="ПГ-055">ПГ-055</option>
+                <option value="ПГ-056">ПГ-056</option>
+                <option value="ПГ-058">ПГ-058</option>
+                <option value="ПГ-064">ПГ-064</option>
+                <option value="МК-111">МК-111</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="materialSelect">Выберите материал:</label>
+            <select id="materialSelect">
+                <option value="Габбро-диабаз.jpg">Габбро-диабаз</option>
+                <option value="Дымовский noise.jpg">Дымовский</option>
+                <option value="Масловский.jpg">Масловский</option>
+                <option value="Бетон.jpg">Бетон</option>
+                <option value="Винга.jpg">Винга</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Размеры стелы:</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" id="stelaHeight" placeholder="Высота" value="80">
+                <input type="number" id="stelaWidth" placeholder="Ширина" value="40">
+                <input type="number" id="stelaDepth" placeholder="Глубина" value="5">
             </div>
-
-            <div class="form-group">
-                <label>Размеры стелы:</label>
-                <div class="size-inputs">
-                    <input type="number" id="stelaHeight" required placeholder="Высота" value="80">
-                    <input type="number" id="stelaWidth" required placeholder="Ширина" value="40">
-                    <input type="number" id="stelaDepth" required placeholder="Глубина" value="5">
-                </div>
+        </div>
+        
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="hasStand" checked>
+                Включить подставку
+            </label>
+        </div>
+        
+        <div class="form-group stand-size" id="standSizeGroup">
+            <label>Размеры подставки:</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" id="standHeight" placeholder="Высота" value="20">
+                <input type="number" id="standWidth" placeholder="Ширина" value="50">
+                <input type="number" id="standDepth" placeholder="Глубина" value="12">
             </div>
-
-            <div class="form-group">
-                <div class="checkbox-group">
-                    <input type="checkbox" id="hasStand" checked>
-                    <label for="hasStand">Включить подставку</label>
-                </div>
-                
-                <div id="standSizeInputs">
-                    <label>Размеры подставки:</label>
-                    <div class="size-inputs">
-                        <input type="number" id="standHeight" placeholder="Высота" value="20">
-                        <input type="number" id="standWidth" placeholder="Ширина" value="50">
-                        <input type="number" id="standDepth" placeholder="Глубина" value="15">
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label for="materialName">Название материала:</label>
-                <input type="text" id="materialName" required placeholder="Например: Габбро-диабаз.jpg" value="Габбро-диабаз.jpg">
-            </div>
-
-            <button type="submit">Обработать модель</button>
-        </form>
-
-        <div id="response" style="display: none;"></div>
+        </div>
+        
+        <button id="processButton">Обработать модель</button>
     </div>
-
+    
+    <div class="result" id="result"></div>
+    
+    <div class="links" id="links">
+        <h3>Созданные файлы:</h3>
+        <div id="fileLinks"></div>
+    </div>
+    
     <script>
-        document.getElementById('hasStand').addEventListener('change', function(e) {
-            const standInputs = document.getElementById('standSizeInputs');
-            standInputs.style.display = e.target.checked ? 'block' : 'none';
+        document.getElementById('hasStand').addEventListener('change', function() {
+            document.getElementById('standSizeGroup').style.display = this.checked ? 'block' : 'none';
         });
-
-        document.getElementById('modelForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+        
+        document.getElementById('processButton').addEventListener('click', async function() {
+            const button = this;
+            const result = document.getElementById('result');
+            const links = document.getElementById('links');
+            const fileLinks = document.getElementById('fileLinks');
             
+            button.disabled = true;
+            button.textContent = 'Обработка...';
+            result.style.display = 'block';
+            result.textContent = 'Выполняется обработка модели...';
+            links.style.display = 'none';
+            
+            const modelId = document.getElementById('modelSelect').value;
+            const materialName = document.getElementById('materialSelect').value;
             const hasStand = document.getElementById('hasStand').checked;
-            const standSize = hasStand ? {
-                height: Number(document.getElementById('standHeight').value),
-                width: Number(document.getElementById('standWidth').value),
-                depth: Number(document.getElementById('standDepth').value)
-            } : null;
-
-            const data = {
-                modelId: document.getElementById('modelId').value,
-                stelaSize: {
-                    height: Number(document.getElementById('stelaHeight').value),
-                    width: Number(document.getElementById('stelaWidth').value),
-                    depth: Number(document.getElementById('stelaDepth').value)
-                },
-                standSize: standSize,
-                materialName: document.getElementById('materialName').value
+            
+            const stelaSize = {
+                height: parseInt(document.getElementById('stelaHeight').value, 10),
+                width: parseInt(document.getElementById('stelaWidth').value, 10),
+                depth: parseInt(document.getElementById('stelaDepth').value, 10)
             };
-
+            
+            const standSize = hasStand ? {
+                height: parseInt(document.getElementById('standHeight').value, 10),
+                width: parseInt(document.getElementById('standWidth').value, 10),
+                depth: parseInt(document.getElementById('standDepth').value, 10)
+            } : null;
+            
             try {
                 const response = await fetch('/process-model', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({
+                        modelId,
+                        stelaSize,
+                        standSize,
+                        materialName
+                    })
                 });
-
-                const result = await response.json();
-                const responseDiv = document.getElementById('response');
-                responseDiv.style.display = 'block';
                 
-                if (response.ok) {
-                    responseDiv.className = 'response success';
-                    responseDiv.innerHTML = 'Успешно!\n\n' + JSON.stringify(result, null, 2);
-                } else {
-                    responseDiv.className = 'response error';
-                    responseDiv.innerHTML = 'Ошибка!\n\n' + JSON.stringify(result, null, 2);
+                const data = await response.json();
+                result.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.success && data.files) {
+                    links.style.display = 'block';
+                    fileLinks.innerHTML = '';
+                    
+                    if (data.files.glb) {
+                        const glbLink = document.createElement('a');
+                        glbLink.href = data.files.glb;
+                        glbLink.textContent = 'Скачать GLB файл';
+                        glbLink.target = '_blank';
+                        fileLinks.appendChild(glbLink);
+                    }
+                    
+                    if (data.files.usdz) {
+                        const usdzLink = document.createElement('a');
+                        usdzLink.href = data.files.usdz;
+                        usdzLink.textContent = 'Скачать USDZ файл';
+                        usdzLink.target = '_blank';
+                        fileLinks.appendChild(usdzLink);
+                    }
                 }
             } catch (error) {
-                const responseDiv = document.getElementById('response');
-                responseDiv.style.display = 'block';
-                responseDiv.className = 'response error';
-                responseDiv.textContent = 'Ошибка: ' + error.message;
+                result.textContent = 'Ошибка при обработке модели: ' + error.message;
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Обработать модель';
             }
         });
     </script>

@@ -3,21 +3,26 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { container } from 'tsyringe';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import fs from 'fs';
 
 import { SceneService } from './services/scene.service';
 import { LoadService } from './services/load.service';
 import { MaterialService } from './services/material.service';
 import { TextureService } from './services/texture.service';
+import { TransformService } from './services/transform.service';
+import { UsdzService } from './services/usdz.service';
 
 // Регистрация сервисов
 container.register(TextureService, { useClass: TextureService });
 container.register(MaterialService, { useClass: MaterialService });
 container.register(LoadService, { useClass: LoadService });
 container.register(SceneService, { useClass: SceneService });
+container.register(TransformService, { useClass: TransformService });
+container.register(UsdzService, { useClass: UsdzService });
 
 const sceneService = container.resolve(SceneService);
+const transformService = container.resolve(TransformService);
+const usdzService = container.resolve(UsdzService);
 
 const app = express();
 app.use(express.json());
@@ -66,53 +71,70 @@ app.post('/process-model', async (req, res) => {
     console.log('- standSize:', standSize);
     console.log('- materialName:', materialName);
 
-    // Инициализация модели
-    await sceneService.initModel(modelId);
+    // Использование нового сервиса трансформации
+    try {
+      // Трансформация и сохранение модели в GLB
+      const glbPath = await transformService.transformModel(
+        modelId,
+        stelaSize,
+        standSize,
+        materialName
+      );
+      
+      // Полный путь к GLB файлу для дальнейшей конвертации
+      const fullGlbPath = path.join(process.cwd(), 'public', glbPath);
+      
+      // Конвертация в USDZ для Apple QuickLook
+      const usdzPath = await usdzService.convertGlbToUsdz(fullGlbPath);
+      
+      res.json({
+        success: true,
+        message: 'Модель успешно обработана',
+        files: {
+          glb: glbPath,
+          usdz: usdzPath
+        }
+      });
+    } catch (error) {
+      // Резервный вариант с использованием старого метода
+      console.warn('Ошибка при использовании нового метода трансформации. Использую резервный метод:', error);
+      
+      // Инициализация модели
+      await sceneService.initModel(modelId);
 
-    // Применение размеров и материалов
-    sceneService.stelaSize = stelaSize;
-    sceneService.standSize = standSize;
-    await sceneService.changeMaterial(materialName);
+      // Применение размеров и материалов
+      sceneService.stelaSize = stelaSize;
+      sceneService.standSize = standSize;
+      await sceneService.changeMaterial(materialName);
 
-    // Экспорт в GLB
-    const gltfExporter = new GLTFExporter();
-    const glbData = await new Promise<ArrayBuffer>((resolve, reject) => {
+      // Экспорт и сохранение с использованием Three.js GLTFExporter
+      const timestamp = Date.now();
+      const filePrefix = `${modelId}_${timestamp}`;
+      
+      // Экспорт сцены в GLB
+      const glbData = await sceneService.exportToGLB();
+      
+      // Сохранение GLB файла
+      const glbFilePath = path.join(glbDir, `${filePrefix}.glb`);
+      fs.writeFileSync(glbFilePath, Buffer.from(glbData));
+      
+      // Пытаемся создать USDZ (может не сработать, если инструменты не установлены)
+      let usdzPath = `/WebAR/usdz/${filePrefix}.usdz`;
       try {
-        console.log('Начало экспорта GLB');
-        gltfExporter.parse(
-          sceneService.getScene(), 
-          (result) => {
-            console.log('GLB экспорт успешно завершен');
-            resolve(result as ArrayBuffer);
-          },
-          (error) => {
-            console.error('Ошибка при экспорте GLB:', error);
-            reject(error);
-          },
-          { binary: true }
-        );
-      } catch (error) {
-        console.error('Ошибка при вызове GLTFExporter.parse:', error);
-        reject(error);
+        usdzPath = await usdzService.convertGlbToUsdz(glbFilePath);
+      } catch (usdzError) {
+        console.warn('Не удалось создать USDZ файл, возвращаем предполагаемый путь:', usdzError);
       }
-    });
-
-    // Сохранение файлов
-    const timestamp = Date.now();
-    const filePrefix = `${modelId}_${timestamp}`;
-    const glbFilePath = path.join(glbDir, `${filePrefix}.glb`);
-    
-    console.log(`Сохранение GLB файла: ${glbFilePath}`);
-    fs.writeFileSync(glbFilePath, Buffer.from(glbData));
-    
-    res.json({
-      success: true,
-      message: 'Модель успешно обработана',
-      files: {
-        glb: `/WebAR/glb/${filePrefix}.glb`,
-        usdz: `/WebAR/usdz/${filePrefix}.usdz` // Заглушка для USDZ
-      }
-    });
+      
+      res.json({
+        success: true,
+        message: 'Модель успешно обработана (резервный метод)',
+        files: {
+          glb: `/WebAR/glb/${filePrefix}.glb`,
+          usdz: usdzPath
+        }
+      });
+    }
   } catch (error) {
     console.error('Ошибка при обработке модели:', error);
     res.status(500).json({

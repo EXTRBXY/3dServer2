@@ -11,6 +11,7 @@ import {
   AmbientLight,
   DirectionalLight,
 } from 'three';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { LoadService } from './load.service';
 import { MaterialService } from './material.service';
 
@@ -357,5 +358,36 @@ export class SceneService {
     }
     
     await this.materialService.changeMaterial(model, materialName);
+  }
+  
+  /**
+   * Экспортирует текущую сцену в формат GLB
+   * @returns ArrayBuffer с данными GLB файла
+   */
+  public async exportToGLB(): Promise<ArrayBuffer> {
+    console.log('Экспорт сцены в GLB формат');
+    
+    const gltfExporter = new GLTFExporter();
+    
+    return new Promise<ArrayBuffer>((resolve, reject) => {
+      try {
+        console.log('Начало экспорта GLB');
+        gltfExporter.parse(
+          this.scene, 
+          (result) => {
+            console.log('GLB экспорт успешно завершен');
+            resolve(result as ArrayBuffer);
+          },
+          (error) => {
+            console.error('Ошибка при экспорте GLB:', error);
+            reject(error);
+          },
+          { binary: true }
+        );
+      } catch (error) {
+        console.error('Ошибка при вызове GLTFExporter.parse:', error);
+        reject(error);
+      }
+    });
   }
 } 

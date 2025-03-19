@@ -1,7 +1,7 @@
 import { injectable } from 'tsyringe';
 import path from 'path';
 import fs from 'fs';
-import { NodeIO } from '@gltf-transform/core';
+import { NodeIO, Document, Material, TextureInfo } from '@gltf-transform/core';
 import { KHRONOS_EXTENSIONS } from '@gltf-transform/extensions';
 import { Size3D } from './scene.service';
 
@@ -9,10 +9,12 @@ import { Size3D } from './scene.service';
 export class TransformService {
   private readonly modelsPath: string;
   private readonly outputPath: string;
+  private readonly texturesPath: string;
 
   constructor() {
     this.modelsPath = path.join(process.cwd(), 'public', '3dpreview', 'models');
     this.outputPath = path.join(process.cwd(), 'public', 'WebAR');
+    this.texturesPath = path.join(process.cwd(), 'public', '3dpreview', 'textures');
   }
 
   private isStelaMesh(name: string): boolean {
@@ -23,12 +25,61 @@ export class TransformService {
     return name.toLowerCase() === 'node_stand';
   }
 
+  private isNoiseMesh(name: string): boolean {
+    return name.toLowerCase() === 'other';
+  }
+
   private convertToMeters(size: Size3D): Size3D {
     return {
       height: parseFloat(size.height as any) / 100,
       width: parseFloat(size.width as any) / 100,
       depth: parseFloat(size.depth as any) / 100
     };
+  }
+
+  private async applyTextures(
+    document: Document,
+    node: any,
+    materialName: string,
+    isNoise: boolean = false
+  ): Promise<void> {
+    const mesh = node.getMesh();
+    if (!mesh) return;
+
+    // Определяем имя текстуры: для Other используем noise версию, для остальных обычную
+    const textureName = isNoise ? `${materialName}_noise` : materialName;
+    const texturePath = path.join(this.texturesPath, textureName + '.jpg');
+
+    console.log(`Применяем текстуру ${textureName} к мешу ${node.getName()}`);
+    console.log(`Путь к текстуре: ${texturePath}`);
+
+    try {
+      if (!fs.existsSync(texturePath)) {
+        throw new Error(`Файл текстуры не найден: ${texturePath}`);
+      }
+
+      // Загружаем текстуру
+      const textureImage = document.createTexture()
+        .setImage(await fs.promises.readFile(texturePath))
+        .setMimeType('image/jpeg');
+
+      // Создаем материал
+      const material = document.createMaterial(node.getName() + '_material')
+        .setBaseColorTexture(textureImage)
+        .setRoughnessFactor(1.0)
+        .setMetallicFactor(0.0)
+        .setDoubleSided(true);
+
+      // Применяем материал ко всем примитивам меша
+      for (const primitive of mesh.listPrimitives()) {
+        primitive.setMaterial(material);
+      }
+
+      console.log(`Текстура успешно применена к мешу ${node.getName()}`);
+    } catch (error) {
+      console.error(`Ошибка при применении текстуры к мешу ${node.getName()}:`, error);
+      throw error;
+    }
   }
 
   public async transformModel(
@@ -146,9 +197,13 @@ export class TransformService {
             if (this.isStelaMesh(name)) {
               stelaMeshNodes.push(node);
               console.log(`Найден меш стелы: ${name}`);
+              // Применяем текстуры в зависимости от типа меша
+              await this.applyTextures(document, node, materialName, this.isNoiseMesh(name));
             } else if (this.isStandMesh(name)) {
               standMeshNode = node;
               console.log(`Найден меш подставки: ${name}`);
+              // Применяем текстуры к подставке
+              await this.applyTextures(document, node, materialName);
             }
           }
         }

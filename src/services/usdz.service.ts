@@ -9,6 +9,7 @@ const execPromise = promisify(exec);
 @injectable()
 export class USDZService {
   private readonly outputPath: string;
+  private readonly dockerImage = 'marlon360/usd-from-gltf:latest';
 
   constructor() {
     this.outputPath = path.join(process.cwd(), 'public', 'WebAR', 'usdz');
@@ -49,13 +50,32 @@ export class USDZService {
         fs.mkdirSync(this.outputPath, { recursive: true });
       }
 
-      // Создаем пустой USDZ файл
-      // В реальном проекте здесь должна быть интеграция с инструментом конвертации
-      // Например, вызов внешней команды gltf2usd или использование библиотеки
-      fs.writeFileSync(usdzFilePath, Buffer.from('USDZ', 'utf8'));
-      console.log(`USDZ файл создан: ${usdzFilePath}`);
+      // Подготавливаем пути для Docker
+      const inputDir = path.dirname(absoluteGlbPath);
+      const dockerCmd = `docker run --rm -v "${inputDir}:/usr/src/input" -v "${this.outputPath}:/usr/src/output" ${this.dockerImage} /usr/src/input/${glbFileName} /usr/src/output/${usdzFileName}`;
       
-      return `/WebAR/usdz/${usdzFileName}`;
+      console.log('Запуск Docker конвертера:', dockerCmd);
+      
+      // Выполняем конвертацию через Docker
+      const { stdout, stderr } = await execPromise(dockerCmd);
+      
+      if (stderr) {
+        console.error('Ошибка при конвертации:', stderr);
+      }
+      
+      if (stdout) {
+        console.log('Результат конвертации:', stdout);
+      }
+
+      // Проверяем, создался ли файл
+      if (fs.existsSync(usdzFilePath)) {
+        console.log(`USDZ файл успешно создан: ${usdzFilePath}`);
+        return `/WebAR/usdz/${usdzFileName}`;
+      } else {
+        console.error('USDZ файл не был создан');
+        return null;
+      }
+
     } catch (error) {
       console.error('Ошибка в USDZService.convertToUSDZ:', error);
       return null;

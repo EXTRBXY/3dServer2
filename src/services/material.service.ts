@@ -11,7 +11,6 @@ export class MaterialService {
   async changeMaterial(model: Object3D<Object3DEventMap>, textureName: string) {
     if (!model.children?.length || !this.isEditableModel(model.name)) return;
 
-    console.log(`Изменение материала модели на ${textureName}`);
     for (const child of model.children) {
       if (!(child instanceof Mesh)) continue;
       
@@ -20,7 +19,6 @@ export class MaterialService {
         ? this.getNoiseVariant(textureName) 
         : textureName;
       
-      console.log(`Применение текстуры ${finalTextureName} к элементу ${child.name}`);
       child.material = await this.createMaterial(finalTextureName);
     }
   }
@@ -34,7 +32,6 @@ export class MaterialService {
       return this.materialCache.get(textureName)!;
     }
 
-    console.log(`Создание материала с текстурой ${textureName}`);
     const material = new MeshStandardMaterial({
       map: await this.textureService.createTexture(textureName),
       name: textureName,

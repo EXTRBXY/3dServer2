@@ -4,7 +4,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MaterialService } from './material.service';
 import path from 'path';
 import fs from 'fs';
-import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 
 interface LoadDto {
   modelId: string;

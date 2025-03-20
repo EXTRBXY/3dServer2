@@ -46,38 +46,28 @@ export class TransformService {
     const mesh = node.getMesh();
     if (!mesh) return;
 
-    // Определяем имя текстуры: для Other используем noise версию, для остальных обычную
     const textureName = isNoise ? `${materialName}_noise` : materialName;
     const texturePath = path.join(this.texturesPath, textureName + '.jpg');
-
-    console.log(`Применяем текстуру ${textureName} к мешу ${node.getName()}`);
-    console.log(`Путь к текстуре: ${texturePath}`);
 
     try {
       if (!fs.existsSync(texturePath)) {
         throw new Error(`Файл текстуры не найден: ${texturePath}`);
       }
 
-      // Загружаем текстуру
       const textureImage = document.createTexture()
         .setImage(await fs.promises.readFile(texturePath))
         .setMimeType('image/jpeg');
 
-      // Создаем материал
       const material = document.createMaterial(node.getName() + '_material')
         .setBaseColorTexture(textureImage)
         .setRoughnessFactor(1.0)
         .setMetallicFactor(0.0)
         .setDoubleSided(true);
 
-      // Применяем материал ко всем примитивам меша
       for (const primitive of mesh.listPrimitives()) {
         primitive.setMaterial(material);
       }
-
-      console.log(`Текстура успешно применена к мешу ${node.getName()}`);
     } catch (error) {
-      console.error(`Ошибка при применении текстуры к мешу ${node.getName()}:`, error);
       throw error;
     }
   }
@@ -97,14 +87,8 @@ export class TransformService {
     const outputDir = path.dirname(outputPath);
 
     try {
-      // Конвертируем все размеры в метры
       const stelaSizeInMeters = this.convertToMeters(stelaSize);
       const standSizeInMeters = standSize ? this.convertToMeters(standSize) : null;
-
-      console.log(`Трансформация модели ${modelId}`);
-      console.log(`Входной файл: ${inputFile}`);
-      console.log(`- Размер стелы (м): ${JSON.stringify(stelaSizeInMeters)}`);
-      console.log(`- Размер подставки (м): ${standSizeInMeters ? JSON.stringify(standSizeInMeters) : 'нет'}`);
 
       if (!fs.existsSync(inputPath)) {
         throw new Error(`Файл модели не найден: ${inputPath}`);
@@ -118,40 +102,31 @@ export class TransformService {
       const document = await io.read(inputPath);
       const nodes = document.getRoot().listNodes();
       
-      // Собираем все меши стелы и подставки
       const stelaMeshNodes = [];
       let standMeshNode = null;
       
-      // Сохраним оригинальные данные о мешах
       const originalData = new Map();
       
-      // Найдем все меши, соответствующие стеле и подставке
       for (const node of nodes) {
         const name = node.getName();
-        console.log(`Нода: ${name}, имеет меш: ${node.getMesh() ? 'да' : 'нет'}`);
         
         if (node.getMesh()) {
-          // Сохраняем оригинальные данные
           const originalScale = node.getScale().slice();
           const originalTranslation = node.getTranslation().slice();
           
-          // Сбрасываем масштаб для измерения
           node.setScale([1, 1, 1] as [number, number, number]);
           node.setTranslation([0, 0, 0] as [number, number, number]);
           
-          // Вычисляем bbox на основе меша
           const mesh = node.getMesh();
           if (mesh) {
             let minX = Infinity, minY = Infinity, minZ = Infinity;
             let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
             
-            // Проходим по всем примитивам меша
             for (const primitive of mesh.listPrimitives()) {
               const positions = primitive.getAttribute('POSITION');
               if (positions) {
                 const positionArray = positions.getArray();
                 
-                // Находим минимальные и максимальные координаты
                 if (positionArray && positionArray.length > 0) {
                   for (let i = 0; i < positionArray.length; i += 3) {
                     const x = positionArray[i];
@@ -175,11 +150,9 @@ export class TransformService {
               depth: maxZ - minZ
             };
             
-            // Восстанавливаем оригинальный масштаб и позицию
             node.setScale(originalScale as [number, number, number]);
             node.setTranslation(originalTranslation as [number, number, number]);
             
-            // Сохраняем в оригинальные данные
             originalData.set(node, {
               originalSize,
               originalScale,
@@ -191,27 +164,18 @@ export class TransformService {
               }
             });
             
-            console.log(`Оригинальный размер меша ${name} (м): `, originalSize);
-            
-            // Классифицируем меш как стела или подставка
             if (this.isStelaMesh(name)) {
               stelaMeshNodes.push(node);
-              console.log(`Найден меш стелы: ${name}`);
-              // Применяем текстуры в зависимости от типа меша
               await this.applyTextures(document, node, materialName, this.isNoiseMesh(name));
             } else if (this.isStandMesh(name)) {
               standMeshNode = node;
-              console.log(`Найден меш подставки: ${name}`);
-              // Применяем текстуры к подставке
               await this.applyTextures(document, node, materialName);
             }
           }
         }
       }
 
-      // Масштабируем стелу
       if (stelaMeshNodes.length > 0) {
-        // Находим общий размер стелы
         let minX = Infinity, minY = Infinity, minZ = Infinity;
         let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
         
@@ -237,18 +201,12 @@ export class TransformService {
           depth: maxZ - minZ
         };
         
-        console.log('Общий размер стелы (м):', totalSize);
-        
-        // Вычисляем коэффициенты масштабирования (уже в метрах)
         const scaleFactors = {
           height: stelaSizeInMeters.height / totalSize.height,
           width: stelaSizeInMeters.width / totalSize.width,
           depth: stelaSizeInMeters.depth / totalSize.depth
         };
-        
-        console.log('Коэффициенты масштабирования стелы:', scaleFactors);
 
-        // Применяем масштабирование ко всем мешам стелы
         for (const node of stelaMeshNodes) {
           const data = originalData.get(node);
           if (data) {
@@ -259,12 +217,10 @@ export class TransformService {
             ] as [number, number, number];
             
             node.setScale(newScale);
-            console.log(`Новый масштаб для ${node.getName()}: [${newScale}]`);
           }
         }
       }
 
-      // Масштабируем подставку
       if (standMeshNode && standSizeInMeters) {
         const data = originalData.get(standMeshNode);
         if (data) {
@@ -274,8 +230,6 @@ export class TransformService {
             depth: standSizeInMeters.depth / data.originalSize.depth
           };
           
-          console.log('Коэффициенты масштабирования подставки:', scaleFactors);
-          
           const newScale = [
             data.originalScale[0] * scaleFactors.width,
             data.originalScale[1] * scaleFactors.height,
@@ -283,16 +237,12 @@ export class TransformService {
           ] as [number, number, number];
           
           standMeshNode.setScale(newScale);
-          console.log(`Новый масштаб для подставки: [${newScale}]`);
         }
       } else if (standMeshNode && !standSizeInMeters) {
         standMeshNode.setScale([0, 0, 0] as [number, number, number]);
-        console.log('Подставка скрыта');
       }
 
-      // Позиционируем стелу относительно подставки
       if (stelaMeshNodes.length > 0) {
-        // Сначала центрируем все по X и Z
         for (const node of stelaMeshNodes) {
           node.setTranslation([0, 0, 0] as [number, number, number]);
         }
@@ -300,7 +250,6 @@ export class TransformService {
           standMeshNode.setTranslation([0, 0, 0] as [number, number, number]);
         }
 
-        // Вычисляем размеры стелы после масштабирования
         let stelaMinY = Infinity;
         let stelaMaxY = -Infinity;
         
@@ -311,7 +260,6 @@ export class TransformService {
             const height = data.originalSize.height * s[1];
             const center = data.center.y * s[1];
             
-            // Находим верхнюю и нижнюю точки стелы
             const top = center + height/2;
             const bottom = center - height/2;
             
@@ -321,9 +269,6 @@ export class TransformService {
         }
         
         const stelaHeight = stelaMaxY - stelaMinY;
-        console.log(`Высота стелы после масштабирования (м): ${stelaHeight}`);
-        console.log(`Нижняя точка стелы (м): ${stelaMinY}`);
-        console.log(`Верхняя точка стелы (м): ${stelaMaxY}`);
 
         if (standMeshNode && standSizeInMeters) {
           const standData = originalData.get(standMeshNode);
@@ -331,24 +276,16 @@ export class TransformService {
             const s = standMeshNode.getScale();
             const standHeight = standData.originalSize.height * s[1];
             
-            // В клиенте подставка центрирована по Y, поэтому её верхняя точка = высота/2
             const standTop = standHeight/1;
-            console.log(`Высота подставки (м): ${standHeight}`);
-            console.log(`Верхняя точка подставки (м): ${standTop}`);
             
-            // Смещаем стелу так, чтобы её нижняя точка была на верхней точке подставки
             const offsetY = standTop - stelaMinY;
-            console.log(`Смещение стелы (м): ${offsetY}`);
             
-            // Применяем смещение ко всем мешам стелы
             for (const node of stelaMeshNodes) {
               node.setTranslation([0, offsetY, 0] as [number, number, number]);
             }
           }
         } else {
-          // Если подставки нет, ставим стелу на уровень Y=0
           const offsetY = -stelaMinY;
-          console.log(`Смещение стелы без подставки (м): ${offsetY}`);
           
           for (const node of stelaMeshNodes) {
             node.setTranslation([0, offsetY, 0] as [number, number, number]);
@@ -357,12 +294,10 @@ export class TransformService {
       }
 
       await io.write(outputPath, document);
-      console.log(`Модель сохранена: ${outputPath}`);
 
       return `/WebAR/glb/${outputFileName}`;
     } catch (error) {
-      console.error('Ошибка при трансформации модели:', error);
       throw error;
     }
   }
-} 
+}

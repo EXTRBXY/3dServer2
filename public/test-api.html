@@ -70,7 +70,7 @@
     </style>
 </head>
 <body>
-    <h1>Тестирование API экспорта 3D моделей</h1>
+    <h1>Тест API</h1>
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('json-tab')">JSON API</div>
@@ -79,7 +79,6 @@
 
     <div id="json-tab" class="tab-content active">
         <h2>Тест JSON API</h2>
-        <p>Используйте эту форму для отправки запроса без загрузки файла (используя существующий modelId)</p>
         
         <div class="form-group">
             <label for="modelId">ID модели (имя файла без расширения):</label>
@@ -186,12 +185,10 @@
     </div>
 
     <div class="response" id="response">
-        Здесь будет отображаться ответ сервера...
     </div>
 
     <script>
         function switchTab(tabId) {
-            // Скрываем все вкладки и удаляем активный класс
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -199,7 +196,6 @@
                 tab.classList.remove('active');
             });
             
-            // Показываем выбранную вкладку и добавляем активный класс
             document.getElementById(tabId).classList.add('active');
             Array.from(document.querySelectorAll('.tab')).find(tab => {
                 return tab.getAttribute('onclick').includes(tabId);
@@ -210,7 +206,6 @@
             const responseElement = document.getElementById('response');
             responseElement.textContent = 'Отправка запроса...';
             
-            // Получаем значения полей
             const modelId = document.getElementById('modelId').value;
             const stelaWidth = document.getElementById('stelaWidth').value;
             const stelaHeight = document.getElementById('stelaHeight').value;
@@ -220,13 +215,11 @@
             const standDepth = document.getElementById('standDepth').value;
             const materialName = document.getElementById('materialName').value;
             
-            // Валидация обязательных полей
             if (!modelId || !stelaWidth || !stelaHeight || !stelaDepth) {
                 responseElement.textContent = 'Ошибка: заполните все обязательные поля';
                 return;
             }
             
-            // Формируем данные запроса
             const requestData = {
                 modelId,
                 stelaWidth,
@@ -235,14 +228,12 @@
                 materialName
             };
             
-            // Добавляем размеры подставки, если они заданы
             if (standWidth && standHeight && standDepth) {
                 requestData.standWidth = standWidth;
                 requestData.standHeight = standHeight;
                 requestData.standDepth = standDepth;
             }
             
-            // Отправляем запрос
             fetch('/process-model', {
                 method: 'POST',
                 headers: {
@@ -254,7 +245,6 @@
             .then(data => {
                 responseElement.textContent = JSON.stringify(data, null, 2);
                 if (data.success) {
-                    // Добавляем ссылки для скачивания
                     const downloadLinks = document.createElement('div');
                     downloadLinks.innerHTML = `
                         <h3>Результат:</h3>
@@ -275,14 +265,12 @@
             
             const formData = new FormData(document.getElementById('upload-form'));
             
-            // Валидация обязательных полей
             if (!formData.get('model') || !formData.get('stelaWidth') || 
                 !formData.get('stelaHeight') || !formData.get('stelaDepth')) {
                 responseElement.textContent = 'Ошибка: заполните все обязательные поля';
                 return;
             }
             
-            // Отправляем запрос
             fetch('/process-model', {
                 method: 'POST',
                 body: formData
@@ -291,7 +279,6 @@
             .then(data => {
                 responseElement.textContent = JSON.stringify(data, null, 2);
                 if (data.success) {
-                    // Добавляем ссылки для скачивания
                     const downloadLinks = document.createElement('div');
                     downloadLinks.innerHTML = `
                         <h3>Результат:</h3>
@@ -314,7 +301,6 @@
             }
         }
         
-        // Установить значение по умолчанию при загрузке страницы
         document.addEventListener('DOMContentLoaded', function() {
             const existingModel = document.getElementById('existingModel');
             existingModel.value = 'ПВ-001';

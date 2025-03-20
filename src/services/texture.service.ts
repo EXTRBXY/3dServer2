@@ -61,9 +61,7 @@ export class TextureService {
       this.textureCache.set(this.defaultTextureName, texture);
       return texture;
     } catch (error) {
-      console.error('Ошибка при загрузке стандартной текстуры:', error);
       
-      // Создаем пустую текстуру как последнее средство
       const texture = new Texture();
       this.configureTexture(texture);
       return texture;

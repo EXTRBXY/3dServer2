@@ -42,14 +42,11 @@ export class SceneService {
   }
 
   private initScene() {
-    // Настройка сцены
     this.scene.background = new Color(0xffffff);
     
-    // Настройка камеры
     this.camera.position.set(-2.2, 1.44, -2.2);
     this.camera.lookAt(this.cameraTarget);
     
-    // Добавление освещения
     const ambientLight = new AmbientLight(0xffffff, 0.8);
     this.scene.add(ambientLight);
     
@@ -72,7 +69,6 @@ export class SceneService {
 
   set stelaSize(value: Size3D | null) {
     if (value === null) return;
-    console.log(`Установка размеров стелы: ${JSON.stringify(value)}`);
     this._stelaSize = value;
     this.updateStelaSize();
     this.updateCameraPosition();
@@ -83,7 +79,6 @@ export class SceneService {
   }
 
   set standSize(value: Size3D | null) {
-    console.log(`Установка размеров подставки: ${value ? JSON.stringify(value) : 'null'}`);
     this._standSize = value;
     this.updateStandVisibility();
     if (value) {
@@ -93,7 +88,6 @@ export class SceneService {
   }
 
   private saveOriginalModelState() {
-    console.log('Сохранение исходного состояния модели');
     this.originalMeshData.clear();
     
     this.getModelObject()?.traverse((object) => {
@@ -119,7 +113,6 @@ export class SceneService {
             originalPosition
           });
           
-          console.log(`Сохранены данные для меша ${object.name}: размер=${JSON.stringify(originalSize)}`);
         }
       }
     });
@@ -159,14 +152,12 @@ export class SceneService {
   }
 
   private updateStelaSize() {
-    console.log('Обновление размеров стелы');
     if (this.originalMeshData.size === 0) {
       this.saveOriginalModelState();
     }
     
     const { stelaMeshes, standMesh } = this.collectMeshes();
     if (stelaMeshes.length === 0) {
-      console.log('Не найдены меши стелы для изменения размеров');
       return;
     }
     
@@ -190,10 +181,7 @@ export class SceneService {
       width: this._stelaSize.width / (originalSize.width * 100),
       depth: this._stelaSize.depth / (originalSize.depth * 100)
     };
-    
-    console.log(`Исходный размер стелы: ${JSON.stringify(originalSize)}`);
-    console.log(`Коэффициенты масштабирования: ${JSON.stringify(scaleFactors)}`);
-    
+        
     tempGroup.clear();
     
     stelaMeshes.forEach(mesh => {
@@ -207,7 +195,6 @@ export class SceneService {
           originalData.originalScale.z * scaleFactors.depth
         );
         
-        console.log(`Обновлен масштаб для меша ${mesh.name}: ${mesh.scale.x}, ${mesh.scale.y}, ${mesh.scale.z}`);
       }
     });
     
@@ -226,13 +213,11 @@ export class SceneService {
       
       stelaMeshes.forEach(mesh => {
         mesh.position.y += offsetY;
-        console.log(`Обновлена позиция для меша ${mesh.name}: y += ${offsetY}`);
       });
     }
   }
 
   private updateStandSize() {
-    console.log('Обновление размеров подставки');
     if (this.originalMeshData.size === 0) {
       this.saveOriginalModelState();
     }
@@ -253,8 +238,6 @@ export class SceneService {
         depth: this._standSize.depth / (originalData.originalSize.depth * 100)
       };
       
-      console.log(`Исходный размер подставки: ${JSON.stringify(originalData.originalSize)}`);
-      console.log(`Коэффициенты масштабирования подставки: ${JSON.stringify(scaleFactors)}`);
       
       standMesh.scale.set(
         originalData.originalScale.x * scaleFactors.width,
@@ -262,14 +245,12 @@ export class SceneService {
         originalData.originalScale.z * scaleFactors.depth
       );
       
-      console.log(`Обновлен масштаб для подставки: ${standMesh.scale.x}, ${standMesh.scale.y}, ${standMesh.scale.z}`);
     }
     
     this.updateStelaSize();
   }
   
   private updateStandVisibility() {
-    console.log(`Обновление видимости подставки: ${this._standSize !== null}`);
     const { stelaMeshes, standMesh } = this.collectMeshes();
     
     if (standMesh) {
@@ -290,18 +271,15 @@ export class SceneService {
         
         stelaMeshes.forEach(mesh => {
           mesh.position.y += offsetY;
-          console.log(`Обновлена позиция для меша ${mesh.name} при изменении видимости подставки: y += ${offsetY}`);
         });
       }
     }
   }
   
   private updateCameraPosition(): void {
-    console.log('Обновление позиции камеры');
     
     const model = this.getModelObject();
     if (!model) {
-      console.log('Модель не найдена для обновления позиции камеры');
       return;
     }
     
@@ -319,12 +297,9 @@ export class SceneService {
     
     this.camera.lookAt(this.cameraTarget);
     
-    console.log(`Новая позиция камеры: ${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z}`);
-    console.log(`Цель камеры: ${this.cameraTarget.x}, ${this.cameraTarget.y}, ${this.cameraTarget.z}`);
   }
 
   public async initModel(modelId: string) {
-    console.log(`Инициализация модели: ${modelId}`);
     this.clearScene();
     
     const model = await this.loadService.loadModel({ modelId, scene: this.scene });
@@ -334,12 +309,10 @@ export class SceneService {
     this.updateStelaSize();
     this.updateCameraPosition();
     
-    console.log('Модель успешно инициализирована');
     return model;
   }
   
   private clearScene() {
-    console.log('Очистка сцены');
     this.scene.children.forEach(child => {
       if(child.name === 'model') {
         this.scene.remove(child);
@@ -350,28 +323,20 @@ export class SceneService {
   }
 
   public async changeMaterial(materialName: string) {
-    console.log(`Изменение материала на: ${materialName}`);
     const model = this.getModelObject();
     if (!model) {
-      console.log('Модель не найдена для изменения материала');
       return;
     }
     
     await this.materialService.changeMaterial(model, materialName);
   }
-  
-  /**
-   * Экспортирует текущую сцену в формат GLB
-   * @returns ArrayBuffer с данными GLB файла
-   */
+
   public async exportToGLB(): Promise<ArrayBuffer> {
-    console.log('Экспорт сцены в GLB формат');
     
     const gltfExporter = new GLTFExporter();
     
     return new Promise<ArrayBuffer>((resolve, reject) => {
       try {
-        console.log('Начало экспорта GLB');
         gltfExporter.parse(
           this.scene, 
           (result) => {
@@ -385,7 +350,6 @@ export class SceneService {
           { binary: true }
         );
       } catch (error) {
-        console.error('Ошибка при вызове GLTFExporter.parse:', error);
         reject(error);
       }
     });

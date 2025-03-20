@@ -6,6 +6,7 @@ import { container } from 'tsyringe';
 import fs from 'fs';
 import bodyParser from 'body-parser';
 import multer from 'multer';
+import { networkInterfaces } from 'os';
 
 import { SceneService } from './services/scene.service';
 import { LoadService } from './services/load.service';
@@ -179,8 +180,24 @@ app.get('/status', (req, res) => {
 });
 
 // Запуск сервера
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const PORT = Number(process.env.PORT) || 3000;
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Сервер запущен на порту ${PORT}`);
   console.log(`WebAR URL: http://localhost:${PORT}/WebAR`);
+  // Выводим все доступные IP адреса
+  const nets = networkInterfaces();
+  console.log('\nДоступные адреса для подключения:');
+  if (nets) {
+    for (const name of Object.keys(nets)) {
+      const interfaces = nets[name];
+      if (interfaces) {
+        for (const net of interfaces) {
+          // Пропускаем non-IPv4 и internal адреса
+          if (net.family === 'IPv4' && !net.internal) {
+            console.log(`http://${net.address}:${PORT}`);
+          }
+        }
+      }
+    }
+  }
 }); 

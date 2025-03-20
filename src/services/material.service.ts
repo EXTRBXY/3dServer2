@@ -1,6 +1,6 @@
 import { injectable } from 'tsyringe';
 import { TextureService } from './texture.service';
-import { Mesh, MeshStandardMaterial, Object3D, Object3DEventMap } from 'three';
+import { Mesh, MeshStandardMaterial, Object3D } from 'three';
 
 @injectable()
 export class MaterialService {
@@ -8,11 +8,9 @@ export class MaterialService {
 
   constructor(private readonly textureService: TextureService) {}
 
-  async changeMaterial(model: Object3D<Object3DEventMap>, textureName: string) {
-    if (!model.children?.length || !this.isEditableModel(model.name)) return;
-
-    for (const child of model.children) {
-      if (!(child instanceof Mesh)) continue;
+  async applyMaterial(model: Object3D, textureName: string) {
+    model.traverse(async (child) => {
+      if (!(child instanceof Mesh)) return;
       
       const meshName = child.name.toLowerCase();
       const finalTextureName = meshName.includes('other') 
@@ -20,11 +18,7 @@ export class MaterialService {
         : textureName;
       
       child.material = await this.createMaterial(finalTextureName);
-    }
-  }
-
-  private isEditableModel(modelName: string): boolean {
-    return modelName.startsWith('ПВ') || modelName.startsWith('ПГ') || modelName === 'model';
+    });
   }
 
   async createMaterial(textureName: string) {

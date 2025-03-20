@@ -1,11 +1,9 @@
 import { injectable } from 'tsyringe';
 import {
   Box3,
-  Color,
   Group,
   Mesh,
   Object3D,
-  PerspectiveCamera,
   Scene,
   Vector3,
   AmbientLight,
@@ -24,10 +22,8 @@ export interface Size3D {
 @injectable()
 export class SceneService {
   private scene = new Scene();
-  private camera = new PerspectiveCamera(45, 1, 0.25, 20);
   private _stelaSize: Size3D = { height: 80, width: 40, depth: 5 };
   private _standSize: Size3D | null = null;
-  private cameraTarget: Vector3 = new Vector3(0, 0.5, 0);
   private originalMeshData = new Map<Mesh, { 
     originalSize: Size3D,
     originalScale: Vector3,
@@ -42,21 +38,12 @@ export class SceneService {
   }
 
   private initScene() {
-    this.scene.background = new Color(0xffffff);
-    
-    this.camera.position.set(-2.2, 1.44, -2.2);
-    this.camera.lookAt(this.cameraTarget);
-    
     const ambientLight = new AmbientLight(0xffffff, 0.8);
     this.scene.add(ambientLight);
     
     const directionalLight = new DirectionalLight(0xffffff, 0.5);
     directionalLight.position.set(1, 1, 1);
     this.scene.add(directionalLight);
-  }
-
-  public getScene(): Scene {
-    return this.scene;
   }
 
   private getWorldBoundingBox(object: Object3D): Box3 {
@@ -71,7 +58,6 @@ export class SceneService {
     if (value === null) return;
     this._stelaSize = value;
     this.updateStelaSize();
-    this.updateCameraPosition();
   }
 
   get standSize(): Size3D | null {
@@ -84,7 +70,6 @@ export class SceneService {
     if (value) {
       this.updateStandSize();
     }
-    this.updateCameraPosition();
   }
 
   private saveOriginalModelState() {
@@ -112,7 +97,6 @@ export class SceneService {
             originalScale,
             originalPosition
           });
-          
         }
       }
     });
@@ -194,7 +178,6 @@ export class SceneService {
           originalData.originalScale.y * scaleFactors.height,
           originalData.originalScale.z * scaleFactors.depth
         );
-        
       }
     });
     
@@ -238,120 +221,63 @@ export class SceneService {
         depth: this._standSize.depth / (originalData.originalSize.depth * 100)
       };
       
-      
       standMesh.scale.set(
         originalData.originalScale.x * scaleFactors.width,
         originalData.originalScale.y * scaleFactors.height,
         originalData.originalScale.z * scaleFactors.depth
       );
-      
     }
     
     this.updateStelaSize();
   }
-  
+
   private updateStandVisibility() {
-    const { stelaMeshes, standMesh } = this.collectMeshes();
-    
+    const { standMesh } = this.collectMeshes();
     if (standMesh) {
       standMesh.visible = this._standSize !== null;
-      
-      if (stelaMeshes.length > 0) {
-        const standBBox = this.getWorldBoundingBox(standMesh);
-        
-        const stelaGroup = new Group();
-        stelaMeshes.forEach(mesh => stelaGroup.add(mesh.clone()));
-        const stelaBBox = this.getWorldBoundingBox(stelaGroup);
-        
-        stelaGroup.clear();
-        
-        const offsetY = this._standSize !== null
-          ? standBBox.max.y - stelaBBox.min.y 
-          : -stelaBBox.min.y;
-        
-        stelaMeshes.forEach(mesh => {
-          mesh.position.y += offsetY;
-        });
-      }
     }
-  }
-  
-  private updateCameraPosition(): void {
-    
-    const model = this.getModelObject();
-    if (!model) {
-      return;
-    }
-    
-    const boundingBox = new Box3().setFromObject(model);
-    const size = new Vector3();
-    boundingBox.getSize(size);
-    
-    this.cameraTarget.set(0, boundingBox.min.y + size.y / 2, 0);
-    
-    const distance = Math.max(size.x, size.y, size.z) * 1.5;
-    const cameraDistance = Math.max(2.2, distance);
-    
-    const direction = new Vector3(-1, 1, -1).normalize();
-    this.camera.position.copy(direction.multiplyScalar(cameraDistance).add(this.cameraTarget));
-    
-    this.camera.lookAt(this.cameraTarget);
-    
   }
 
   public async initModel(modelId: string) {
     this.clearScene();
-    
-    const model = await this.loadService.loadModel({ modelId, scene: this.scene });
-    this.scene.add(model);
-    
-    this.saveOriginalModelState();
-    this.updateStelaSize();
-    this.updateCameraPosition();
-    
-    return model;
+    const model = await this.loadService.loadModel(modelId);
+    if (model) {
+      model.name = 'model';
+      this.scene.add(model);
+      this.saveOriginalModelState();
+    }
   }
-  
+
   private clearScene() {
-    this.scene.children.forEach(child => {
-      if(child.name === 'model') {
-        this.scene.remove(child);
-      }
-    });
-    this.loadService.removeModel(this.scene);
+    const model = this.getModelObject();
+    if (model) {
+      this.scene.remove(model);
+    }
     this.originalMeshData.clear();
   }
 
   public async changeMaterial(materialName: string) {
     const model = this.getModelObject();
-    if (!model) {
-      return;
+    if (model) {
+      await this.materialService.applyMaterial(model, materialName);
     }
-    
-    await this.materialService.changeMaterial(model, materialName);
   }
 
   public async exportToGLB(): Promise<ArrayBuffer> {
-    
-    const gltfExporter = new GLTFExporter();
-    
-    return new Promise<ArrayBuffer>((resolve, reject) => {
-      try {
-        gltfExporter.parse(
-          this.scene, 
-          (result) => {
-            console.log('GLB экспорт успешно завершен');
-            resolve(result as ArrayBuffer);
-          },
-          (error) => {
-            console.error('Ошибка при экспорте GLB:', error);
-            reject(error);
-          },
-          { binary: true }
-        );
-      } catch (error) {
-        reject(error);
-      }
+    return new Promise((resolve, reject) => {
+      const gltfExporter = new GLTFExporter();
+      
+      gltfExporter.parse(
+        this.scene,
+        (gltf) => {
+          resolve(gltf as ArrayBuffer);
+        },
+        (error) => {
+          console.error('Ошибка при вызове GLTFExporter.parse:', error);
+          reject(error);
+        },
+        { binary: true }
+      );
     });
   }
 } 

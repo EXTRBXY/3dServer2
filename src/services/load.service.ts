@@ -1,18 +1,12 @@
 import { injectable } from 'tsyringe';
-import { Group, Mesh, Object3D, Object3DEventMap, Scene } from 'three';
+import { Group, Mesh, Object3D } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MaterialService } from './material.service';
 import path from 'path';
 import fs from 'fs';
 
-interface LoadDto {
-  modelId: string;
-  scene: Scene;
-}
-
 @injectable()
 export class LoadService {
-  private model?: Group<Object3DEventMap>;
   private gltfLoader = new GLTFLoader();
   private defaultTexture = 'Габбро-диабаз.jpg';
   private readonly modelsPath: string;
@@ -21,32 +15,14 @@ export class LoadService {
     this.modelsPath = path.join(process.cwd(), 'public', '3dpreview', 'models');
   }
 
-  public removeModel(scene: Scene) {
-    if (this.model) {
-      scene.remove(this.model);
-      this.model = undefined;
-    }
-
-    const modelsToRemove: Object3D[] = [];
-    scene.children.forEach(child => {
-      if (child.name === 'model') {
-        modelsToRemove.push(child);
-      }
-    });
-    
-    modelsToRemove.forEach(model => {
-      scene.remove(model);
-    });
-  }
-
-  public async loadModel({ modelId, scene }: LoadDto) {
+  public async loadModel(modelId: string): Promise<Group | null> {
     const modelPath = path.join(this.modelsPath, `${modelId}.glb`);
     
     try {
       console.log(`Загрузка модели: ${modelPath}`);
       if (!fs.existsSync(modelPath)) {
         console.error(`Файл модели не найден: ${modelPath}`);
-        throw new Error(`Файл модели не найден: ${modelPath}`);
+        return null;
       }
       
       const buffer = fs.readFileSync(modelPath);
@@ -59,8 +35,6 @@ export class LoadService {
           (gltf) => {
             console.log('Модель успешно загружена');
             const model = gltf.scene;
-            model.name = 'model';
-            this.model = model;
             
             if (!modelId.startsWith('МК')) {
               const materialPromises: Promise<void>[] = [];

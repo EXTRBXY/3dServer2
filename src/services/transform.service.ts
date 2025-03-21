@@ -1,7 +1,7 @@
 import { injectable } from 'tsyringe';
 import path from 'path';
 import fs from 'fs';
-import { NodeIO, Document, Material, TextureInfo } from '@gltf-transform/core';
+import { NodeIO, Document } from '@gltf-transform/core';
 import { KHRONOS_EXTENSIONS } from '@gltf-transform/extensions';
 import { Size3D } from './scene.service';
 
@@ -18,15 +18,16 @@ export class TransformService {
   }
 
   private isStelaMesh(name: string): boolean {
-    return name.toLowerCase() === 'node' || name.toLowerCase() === 'other';
+    const lowerName = name.toLowerCase();
+    return lowerName.includes('node') || lowerName.includes('other');
   }
 
   private isStandMesh(name: string): boolean {
-    return name.toLowerCase() === 'node_stand';
+    return name.toLowerCase().includes('node_stand');
   }
 
   private isNoiseMesh(name: string): boolean {
-    return name.toLowerCase() === 'other';
+    return name.toLowerCase().includes('other');
   }
 
   private convertToMeters(size: Size3D): Size3D {
@@ -46,11 +47,71 @@ export class TransformService {
     const mesh = node.getMesh();
     if (!mesh) return;
 
-    const textureName = isNoise ? `${materialName}_noise` : materialName;
-    const texturePath = path.join(this.texturesPath, textureName + '.jpg');
+    const baseMaterialName = materialName.replace(/\.jpg$/i, '');
+    const textureName = isNoise ? `${baseMaterialName}_noise.jpg` : `${baseMaterialName}.jpg`;
+    const texturePath = path.join(this.texturesPath, textureName);
 
     try {
       if (!fs.existsSync(texturePath)) {
+        const alternateTextureName = isNoise ? `${baseMaterialName} noise.jpg` : textureName;
+        const alternateTexturePath = path.join(this.texturesPath, alternateTextureName);
+        
+        if (fs.existsSync(alternateTexturePath)) {
+          const textureImage = document.createTexture()
+            .setImage(await fs.promises.readFile(alternateTexturePath))
+            .setMimeType('image/jpeg');
+
+          const material = document.createMaterial(node.getName() + '_material')
+            .setBaseColorTexture(textureImage)
+            .setRoughnessFactor(1.0)
+            .setMetallicFactor(0.0)
+            .setDoubleSided(true);
+
+          for (const primitive of mesh.listPrimitives()) {
+            primitive.setMaterial(material);
+          }
+          return;
+        }
+        
+        if (isNoise) {
+          const regularTexturePath = path.join(this.texturesPath, `${baseMaterialName}.jpg`);
+          if (fs.existsSync(regularTexturePath)) {
+            const textureImage = document.createTexture()
+              .setImage(await fs.promises.readFile(regularTexturePath))
+              .setMimeType('image/jpeg');
+
+            const material = document.createMaterial(node.getName() + '_material')
+              .setBaseColorTexture(textureImage)
+              .setRoughnessFactor(1.0)
+              .setMetallicFactor(0.0)
+              .setDoubleSided(true);
+
+            for (const primitive of mesh.listPrimitives()) {
+              primitive.setMaterial(material);
+            }
+            return;
+          }
+        }
+        
+        const defaultTexturePath = path.join(this.texturesPath, 'Габбро-диабаз.jpg');
+        if (fs.existsSync(defaultTexturePath)) {
+          console.log(`Используем дефолтную текстуру: ${defaultTexturePath}`);
+          const textureImage = document.createTexture()
+            .setImage(await fs.promises.readFile(defaultTexturePath))
+            .setMimeType('image/jpeg');
+
+          const material = document.createMaterial(node.getName() + '_material')
+            .setBaseColorTexture(textureImage)
+            .setRoughnessFactor(1.0)
+            .setMetallicFactor(0.0)
+            .setDoubleSided(true);
+
+          for (const primitive of mesh.listPrimitives()) {
+            primitive.setMaterial(material);
+          }
+          return;
+        }
+        
         throw new Error(`Файл текстуры не найден: ${texturePath}`);
       }
 
@@ -68,6 +129,31 @@ export class TransformService {
         primitive.setMaterial(material);
       }
     } catch (error) {
+      console.error(`Ошибка при применении текстуры ${textureName}:`, error);
+      
+      try {
+        const defaultTexturePath = path.join(this.texturesPath, 'Габбро-диабаз.jpg');
+        if (fs.existsSync(defaultTexturePath)) {
+          console.log(`Используем дефолтную текстуру после ошибки: ${defaultTexturePath}`);
+          const textureImage = document.createTexture()
+            .setImage(await fs.promises.readFile(defaultTexturePath))
+            .setMimeType('image/jpeg');
+
+          const material = document.createMaterial(node.getName() + '_material')
+            .setBaseColorTexture(textureImage)
+            .setRoughnessFactor(1.0)
+            .setMetallicFactor(0.0)
+            .setDoubleSided(true);
+
+          for (const primitive of mesh.listPrimitives()) {
+            primitive.setMaterial(material);
+          }
+          return;
+        }
+      } catch (fallbackError) {
+        console.error('Ошибка при применении дефолтной текстуры:', fallbackError);
+      }
+      
       throw error;
     }
   }
@@ -87,6 +173,9 @@ export class TransformService {
     const outputDir = path.dirname(outputPath);
 
     try {
+      console.log(`Обработка модели: ${modelId}`);
+      console.log(`Путь к файлу: ${inputPath}`);
+
       const stelaSizeInMeters = this.convertToMeters(stelaSize);
       const standSizeInMeters = standSize ? this.convertToMeters(standSize) : null;
 
@@ -101,6 +190,13 @@ export class TransformService {
       const io = new NodeIO().registerExtensions(KHRONOS_EXTENSIONS);
       const document = await io.read(inputPath);
       const nodes = document.getRoot().listNodes();
+      
+      console.log('Найденные ноды:');
+      for (const node of nodes) {
+        if (node.getMesh()) {
+          console.log(`- Нод: ${node.getName()}`);
+        }
+      }
       
       const stelaMeshNodes = [];
       let standMeshNode = null;
@@ -164,16 +260,19 @@ export class TransformService {
               }
             });
             
-            if (this.isStelaMesh(name)) {
-              stelaMeshNodes.push(node);
-              await this.applyTextures(document, node, materialName, this.isNoiseMesh(name));
-            } else if (this.isStandMesh(name)) {
+            if (this.isStandMesh(name)) {
               standMeshNode = node;
               await this.applyTextures(document, node, materialName);
+            } else {
+              stelaMeshNodes.push(node);
+              await this.applyTextures(document, node, materialName, this.isNoiseMesh(name));
             }
           }
         }
       }
+
+      console.log(`Найдено мешей стелы: ${stelaMeshNodes.length}`);
+      console.log(`Найден меш подставки: ${standMeshNode ? 'да' : 'нет'}`);
 
       if (stelaMeshNodes.length > 0) {
         let minX = Infinity, minY = Infinity, minZ = Infinity;

@@ -118,6 +118,7 @@ app.post('/process-model', upload.single('model'), async (req, res) => {
     console.log(`- Модель: ${fileNameWithoutExt}`);
     console.log(`- Размеры стелы: ${stelaWidth}x${stelaHeight}x${stelaDepth}`);
     console.log(`- Размеры подставки: ${standWidth || 'нет'}x${standHeight || 'нет'}x${standDepth || 'нет'}`);
+    console.log(`- Материал: ${materialName}`);
 
     // Формируем объект с размерами стелы
     const stelaSize = {

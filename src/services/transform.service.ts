@@ -1,9 +1,10 @@
-import { injectable } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import path from 'path';
 import fs from 'fs';
 import { NodeIO, Document } from '@gltf-transform/core';
 import { KHRONOS_EXTENSIONS } from '@gltf-transform/extensions';
 import { Size3D } from './scene.service';
+import { HashService, ModelParameters } from './hash.service';
 
 @injectable()
 export class TransformService {
@@ -11,7 +12,7 @@ export class TransformService {
   private readonly outputPath: string;
   private readonly texturesPath: string;
 
-  constructor() {
+  constructor(@inject(HashService) private readonly hashService: HashService) {
     this.modelsPath = path.join(process.cwd(), 'public', '3dpreview', 'models');
     this.outputPath = path.join(process.cwd(), 'public', 'WebAR');
     this.texturesPath = path.join(process.cwd(), 'public', '3dpreview', 'textures');
@@ -167,14 +168,30 @@ export class TransformService {
   ): Promise<string> {
     const inputFile = fileName || `${modelId}.glb`;
     const inputPath = path.join(this.modelsPath, inputFile);
-    const timestamp = Date.now();
-    const outputFileName = `${modelId}_${timestamp}.glb`;
+    
+    // Создаем объект параметров модели для генерации хеша
+    const modelParams: ModelParameters = {
+      modelId,
+      stelaSize,
+      standSize,
+      materialName
+    };
+    
+    // Генерируем имя файла с хешем
+    const outputFileName = this.hashService.generateFileName(modelParams, 'glb');
     const outputPath = path.join(this.outputPath, 'glb', outputFileName);
     const outputDir = path.dirname(outputPath);
 
     try {
       console.log(`Обработка модели: ${modelId}`);
       console.log(`Путь к файлу: ${inputPath}`);
+      console.log(`Имя выходного файла: ${outputFileName}`);
+
+      // Проверяем, существует ли уже файл с таким хешем
+      if (fs.existsSync(outputPath)) {
+        console.log(`Файл с таким хешем уже существует: ${outputPath}`);
+        return path.relative(process.cwd(), outputPath).replace(/\\/g, '/');
+      }
 
       const stelaSizeInMeters = this.convertToMeters(stelaSize);
       const standSizeInMeters = standSize ? this.convertToMeters(standSize) : null;

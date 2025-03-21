@@ -14,6 +14,7 @@ import { MaterialService } from './services/material.service';
 import { TextureService } from './services/texture.service';
 import { TransformService } from './services/transform.service';
 import { USDZService } from './services/usdz.service';
+import { HashService } from './services/hash.service';
 
 // Регистрация сервисов
 container.register(TextureService, { useClass: TextureService });
@@ -22,13 +23,20 @@ container.register(LoadService, { useClass: LoadService });
 container.register(SceneService, { useClass: SceneService });
 container.register(TransformService, { useClass: TransformService });
 container.register(USDZService, { useClass: USDZService });
+container.register(HashService, { useClass: HashService });
 
 const transformService = container.resolve(TransformService);
 const usdzService = container.resolve(USDZService);
+const hashService = container.resolve(HashService);
 
 // Создание приложения
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: ['https://epitaphia.ru', 'https://constructor.epitaphiya.com', 'http://192.168.88.18:3001'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -60,6 +68,60 @@ const upload = multer({ storage });
 
 // Статические файлы
 app.use(express.static(publicDir));
+
+// Новый маршрут для обработки моделей по хешу
+app.get('/ar-model/:modelId/:hash', async (req, res) => {
+  try {
+    const { modelId, hash } = req.params;
+    
+    if (!modelId || !hash) {
+      return res.status(400).json({ error: 'Не указаны обязательные параметры' });
+    }
+    
+    // Проверяем наличие файлов с этим хешем
+    const glbFileName = `${modelId}_${hash}.glb`;
+    const usdzFileName = `${modelId}_${hash}.usdz`;
+    
+    const glbPath = path.join(glbDir, glbFileName);
+    const usdzPath = path.join(usdzDir, usdzFileName);
+    
+    const glbExists = fs.existsSync(glbPath);
+    const usdzExists = fs.existsSync(usdzPath);
+    
+    if (!glbExists) {
+      return res.status(404).json({ error: 'Модель не найдена' });
+    }
+    
+    // Формирование полных URL
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const glbUrl = `${baseUrl}/WebAR/glb/${glbFileName}`;
+    let usdzUrl = usdzExists ? `${baseUrl}/WebAR/usdz/${usdzFileName}` : null;
+    
+    // Если USDZ файл не существует, но GLB есть, попробуем создать USDZ
+    if (!usdzExists && glbExists) {
+      const relativePath = `/WebAR/glb/${glbFileName}`;
+      const usdzRelativePath = await usdzService.convertToUSDZ(relativePath);
+      
+      if (usdzRelativePath) {
+        usdzUrl = `${baseUrl}${usdzRelativePath}`;
+      }
+    }
+    
+    return res.json({
+      success: true,
+      glbUrl,
+      usdzUrl,
+      modelId
+    });
+  } catch (error) {
+    console.error('Ошибка при обработке модели по хешу:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Ошибка при обработке модели',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
 
 // Обработка модели
 app.post('/process-model', upload.single('model'), async (req, res) => {
@@ -136,6 +198,17 @@ app.post('/process-model', upload.single('model'), async (req, res) => {
         depth: parseFloat(standDepth)
       };
     }
+    
+    // Подготавливаем параметры модели для генерации хеша
+    const modelParams = {
+      modelId: fileNameWithoutExt,
+      stelaSize,
+      standSize,
+      materialName: materialName || 'standard'
+    };
+    
+    // Генерируем хеш на основе параметров
+    const modelHash = hashService.generateModelHash(modelParams);
 
     // Трансформация модели
     const glbPath = await transformService.transformModel(
@@ -159,7 +232,8 @@ app.post('/process-model', upload.single('model'), async (req, res) => {
       success: true,
       glbUrl,
       usdzUrl,
-      modelId: fileNameWithoutExt
+      modelId: fileNameWithoutExt,
+      modelHash: modelHash // Добавляем хеш к ответу
     });
   } catch (error) {
     console.error('Ошибка при обработке модели:', error);

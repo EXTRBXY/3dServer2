@@ -169,7 +169,6 @@ export class TransformService {
     const inputFile = fileName || `${modelId}.glb`;
     const inputPath = path.join(this.modelsPath, inputFile);
     
-    // Создаем объект параметров модели для генерации хеша
     const modelParams: ModelParameters = {
       modelId,
       stelaSize,
@@ -177,7 +176,6 @@ export class TransformService {
       materialName
     };
     
-    // Генерируем имя файла с хешем
     const outputFileName = this.hashService.generateFileName(modelParams, 'glb');
     const outputPath = path.join(this.outputPath, 'glb', outputFileName);
     const outputDir = path.dirname(outputPath);
@@ -187,7 +185,6 @@ export class TransformService {
       console.log(`Путь к файлу: ${inputPath}`);
       console.log(`Имя выходного файла: ${outputFileName}`);
 
-      // Проверяем, существует ли уже файл с таким хешем
       if (fs.existsSync(outputPath)) {
         console.log(`Файл с таким хешем уже существует: ${outputPath}`);
         return path.relative(process.cwd(), outputPath).replace(/\\/g, '/');
